@@ -1,11 +1,26 @@
 <template>
   <q-page class="row q-pt-xl">
     <div class="full-width q-px-xl">
-      <div class="q-mb-xl">
-        <q-input v-model="tempData.name" label="姓名" />
-        <q-input v-model="tempData.age" label="年齡" />
-        <q-btn color="primary" class="q-mt-md">新增</q-btn>
-      </div>
+      <q-form ref="formRef" @submit="onSubmit" class="q-mb-xl">
+        <q-input
+          v-model="tempData.name"
+          label="姓名"
+          lazy-rules
+          :rules="nameRules"
+        />
+        <q-input
+          v-model="tempData.age"
+          label="年齡"
+          lazy-rules
+          :rules="ageRules"
+        />
+        <q-btn
+          :label="isEditing ? '修改' : '新增'"
+          type="submit"
+          color="primary"
+          class="q-mt-md"
+        />
+      </q-form>
 
       <q-table
         flat
@@ -79,13 +94,19 @@
 
 <script setup lang="ts">
 import axios from 'axios';
-import { QTableProps } from 'quasar';
-import { ref } from 'vue';
+import { QTableProps, QForm } from 'quasar';
+import { onMounted, ref } from 'vue';
 interface btnType {
   label: string;
   icon: string;
   status: string;
 }
+interface BlockData {
+  id?: string;
+  name: string;
+  age: number;
+}
+const formRef = ref<InstanceType<typeof QForm> | null>(null);
 const blockData = ref([
   {
     name: 'test',
@@ -118,14 +139,109 @@ const tableButtons = ref([
     status: 'delete',
   },
 ]);
-
 const tempData = ref({
   name: '',
   age: '',
 });
-function handleClickOption(btn, data) {
-  // ...
+
+const isEditing = ref(false);
+const currentEditId = ref<string | null>(null);
+const nameRules = [(val: string | number) => !!val || '請輸入姓名'];
+
+const ageRules = [
+  (val: string | number) => !!val || '請輸入年齡',
+  (val: string | number) => Number.isInteger(Number(val)) || '請輸入整數',
+];
+function handleClickOption(btn: btnType, data: BlockData) {
+  const { id, name, age } = data;
+  if (btn.status === 'edit') {
+    isEditing.value = true;
+    tempData.value = { name, age: age.toString() };
+
+    if (id) {
+      currentEditId.value = id;
+    }
+  }
+  if (btn.status === 'delete') {
+    if (!data.id) return;
+
+    deleteData(data.id);
+  }
 }
+async function fetchData() {
+  axios
+    .get('https://dahua.metcfire.com.tw/api/CRUDTest/a')
+    .then((response) => {
+      blockData.value = response.data;
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+}
+function addData(blockData: BlockData) {
+  axios
+    .post(' https://dahua.metcfire.com.tw/api/CRUDTest', blockData)
+    .then(() => {
+      fetchData();
+      resetForm();
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+}
+function updateData(blockData: BlockData) {
+  axios
+    .patch('https://dahua.metcfire.com.tw/api/CRUDTest', blockData)
+    .then(() => {
+      fetchData();
+      resetForm();
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+}
+function deleteData(id: string) {
+  axios
+    .delete(` https://dahua.metcfire.com.tw/api/CRUDTest/${id}`)
+    .then(() => {
+      fetchData();
+    })
+    .catch((error) => {
+      console.log(error);
+    });
+}
+async function resetForm() {
+  formRef.value?.resetValidation();
+
+  tempData.value = {
+    name: '',
+    age: '',
+  };
+}
+function onSubmit() {
+  if (isEditing.value) {
+    if (!currentEditId.value) return;
+    const { name, age } = tempData.value;
+    const newData = {
+      id: currentEditId.value,
+      name,
+      age: parseInt(age) || 0,
+    };
+    updateData(newData);
+    isEditing.value = false;
+    return;
+  } else {
+    const { name, age } = tempData.value;
+    const newData = {
+      name,
+      age: parseInt(age) || 0,
+    };
+    addData(newData);
+  }
+}
+onMounted(() => {
+  fetchData();
+});
 </script>
 
 <style lang="scss" scoped>
